@@ -36,7 +36,11 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    next_h =  np.dot(prev_h, Wh) + np.dot(x, Wx) + b
+
+    next_h = np.tanh(next_h)
+
+    cache = (next_h, x, prev_h, Wx, Wh)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -47,6 +51,7 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
 
 def rnn_step_backward(dnext_h, cache):
     """
+    Backward pass for a single timestep of a vanilla RNN.
     Backward pass for a single timestep of a vanilla RNN.
 
     Inputs:
@@ -69,7 +74,18 @@ def rnn_step_backward(dnext_h, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    next_h, x, prev_h, Wx, Wh = cache
+
+    tanhd = (1 - next_h * next_h)  # backprop through tanh
+    dh = dnext_h * tanhd
+
+    dx = np.dot(dh, Wx.T)
+    dprev_h = np.dot(dh, Wh.T)
+
+    dWx = np.dot(x.T,  dh)
+    dWh = np.dot(prev_h.T,  dh)
+
+    db = np.sum(dh, axis = 0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -104,7 +120,19 @@ def rnn_forward(x, h0, Wx, Wh, b):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N,T,D = x.shape
+    _,H = h0.shape
+
+    hc = h0
+    cache = {}
+    h = np.zeros([N, T, H])
+
+    for i in range(0, T):
+        xc = x[:, i, :]
+
+        hc, cachec = rnn_step_forward(xc, hc, Wx, Wh, b)
+        h[:, i, :] = hc
+        cache[i] = cachec
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -140,7 +168,27 @@ def rnn_backward(dh, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+
+    N,T,H = dh.shape
+    _, x, _, _, _ = cache[0]
+    _,D = x.shape
+
+    dx = np.zeros([N,T,D])
+    dWx = np.zeros([D,H])
+    dWh = np.zeros([H,H])
+    db = np.zeros([H])
+    dhn = np.zeros([N,H])
+
+    for i in range(T - 1, -1, -1):
+        dhn = dh[:, i, :] + dhn
+        _dx, _dprev_h, _dWx, _dWh, _db = rnn_step_backward(dhn, cache[i])
+        dhn = _dprev_h
+        dx[:, i, :] = _dx
+        db += _db
+        dWx += _dWx
+        dWh += _dWh
+
+    dh0  = _dprev_h
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -172,7 +220,9 @@ def word_embedding_forward(x, W):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # https://scipy-cookbook.readthedocs.io/items/Indexing.html - LUT
+    out = W[x]
+    cache = *W.shape, x
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -196,7 +246,9 @@ def word_embedding_backward(dout, cache):
     Returns:
     - dW: Gradient of word embedding matrix, of shape (V, D).
     """
-    dW = None
+    V, D, x = cache
+
+    dW = np.zeros([V,D])
     ##############################################################################
     # TODO: Implement the backward pass for word embeddings.                     #
     #                                                                            #
@@ -205,8 +257,8 @@ def word_embedding_backward(dout, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
+    np.add.at(dW, x, dout)
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
     #                               END OF YOUR CODE                             #
