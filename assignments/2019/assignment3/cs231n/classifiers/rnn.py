@@ -143,13 +143,39 @@ class CaptioningRNN(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         # Initial h
+        h0 = np.dot(features, W_proj) + b_proj
+
+        xvec, word_embedding_cache = word_embedding_forward(captions_in, W_embed)
+        h, rnn_cache = rnn_forward(xvec, h0, Wx, Wh, b)
+
+        scores, temporal_cache = temporal_affine_forward(h, W_vocab, b_vocab)
+
+        loss, dscores = temporal_softmax_loss(scores, captions_out, mask)
+
+        # Backward pass -  get gradients
+        dh, dW_vocab, db_vocab = temporal_affine_backward(dscores, temporal_cache)
+        dxvec, dh0, dWx, dWh, db = rnn_backward(dh, rnn_cache)
+
+        db_proj = np.sum(dh0, axis = 0)
+        dW_proj = np.dot(features.T, dh0)
+
+
+        dW_embed = word_embedding_backward(dxvec, word_embedding_cache) 
+
+        # Assign gradients
+        grads['W_embed'] = dW_embed
+
+        grads['W_proj'] = dW_proj
+        grads['b_proj'] = db_proj
+
+        grads['Wx'] = dWx
+        grads['Wh'] = dWh
+        grads['b'] = db
+
+        grads['W_vocab'] = dW_vocab
+        grads['b_vocab'] = db_vocab    
 
   
-
-
-
-        pass
-
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -217,7 +243,23 @@ class CaptioningRNN(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        prev_h = np.dot(features, W_proj) + b_proj
+
+        c_i = self._start * np.ones((N), dtype=np.int32)
+
+        for i in range(0, max_length):
+          x, _ = word_embedding_forward(c_i, W_embed)
+
+          next_h, _ = rnn_step_forward(x, prev_h, Wx, Wh, b)
+
+          scores_i = np.dot(next_h, W_vocab) + b_vocab
+
+          c_i = np.argmax(scores_i, axis = 1)
+
+          captions[:, i] = np.reshape(c_i, [N])
+
+          prev_h = next_h
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
