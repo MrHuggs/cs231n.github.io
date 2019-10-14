@@ -309,7 +309,26 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    a =  np.dot(prev_h, Wh) + np.dot(x, Wx) + b
+
+    N,H = prev_h.shape
+
+    ai = a[:, 0   : H]
+    af = a[:, H   : 2 * H]
+    ao = a[:, 2 *H: 3 * H]
+    ag = a[:, 3 *H:]
+
+
+    i = sigmoid(ai)
+    f = sigmoid(af)
+    o = sigmoid(ao)
+    g = np.tanh(ag)
+
+    next_c = f * prev_c + i * g
+    tanh_next_c = np.tanh(next_c)
+    next_h = o * tanh_next_c
+
+    cache = (next_c, tanh_next_c, next_h, x, prev_h, Wx, Wh, i, f, o, g, prev_c)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -344,7 +363,32 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     # the output value from the nonlinearity.                                   #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    next_c, tanh_next_c, next_h, x, prev_h, Wx, Wh, i, f, o, g, prev_c = cache
 
+    do = tanh_next_c * dnext_h
+    dtanh_next_c = o * dnext_h
+    dpretanh_nextc = dtanh_next_c * (1 - tanh_next_c * tanh_next_c)
+
+    # c_t-1 feeds directly into c_t di, but also into h_t through c_t
+
+    di = g * (dnext_c + dpretanh_nextc)
+    dg = i * (dnext_c + dpretanh_nextc)
+    df = prev_c * (dnext_c + dpretanh_nextc)
+    dprev_c = f * (dnext_c + dpretanh_nextc) 
+
+    dai = (1 - i) * i * di
+    daf = (1 - f) * f * df
+    dao = (1 - o) * o * do
+    dag = (1 - g * g) * dg
+
+    dh = np.hstack((dai, daf, dao, dag))
+
+    dx = np.dot(dh, Wx.T)
+    dprev_h = np.dot(dh, Wh.T)    
+
+    dWx = np.dot(x.T,  dh)
+    dWh = np.dot(prev_h.T,  dh)
+    db = np.sum(dh, axis = 0)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -353,6 +397,19 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     ##############################################################################
 
     return dx, dprev_h, dprev_c, dWx, dWh, db
+
+# Helper functions for printing out debug in the notebooks.
+# It's possible to get part of the W/B matrices correct...
+def W_i(W, i):
+    _, H4 = W.shape
+    H = H4 // 4
+    return W[:, i * H: (i + 1) * H]
+
+def B_i(B, i):
+    H4 = B.shape[0]
+    H = H4 // 4
+    return B[i * H: (i + 1) * H]    
+
 
 
 def lstm_forward(x, h0, Wx, Wh, b):
@@ -384,7 +441,20 @@ def lstm_forward(x, h0, Wx, Wh, b):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N,T,D = x.shape
+    _,H = h0.shape
+
+    hc = h0
+    cc = np.zeros_like(hc)
+    cache = {}
+    h = np.zeros([N, T, H])
+
+    for i in range(0, T):
+        xc = x[:, i, :]
+
+        hc, cc, cachec = lstm_step_forward(xc, hc, cc, Wx, Wh, b)
+        h[:, i, :] = hc
+        cache[i] = cachec
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -416,7 +486,29 @@ def lstm_backward(dh, cache):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+
+    N,T,H = dh.shape
+    _, _, _, x, _, _, _, _, _, _, _, _ = cache[0]
+    _,D = x.shape
+
+    dx = np.zeros([N,T,D])
+    dhn = np.zeros([N,H])
+    dcn = np.zeros([N,H])
+    dWx = np.zeros([D,4 * H])
+    dWh = np.zeros([H,4 * H])
+    db = np.zeros([4 * H])
+
+    for i in range(T - 1, -1, -1):
+        dhn = dh[:, i, :] + dhn
+        _dx, _dprev_h, _dprev_c, _dWx, _dWh, _db = lstm_step_backward(dhn, dcn, cache[i])
+        dhn = _dprev_h
+        dcn = _dprev_c
+        dx[:, i, :] = _dx
+        db += _db
+        dWx += _dWx
+        dWh += _dWh
+
+    dh0  = _dprev_h
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
